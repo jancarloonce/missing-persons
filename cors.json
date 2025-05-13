@@ -1,0 +1,9 @@
+[
+    {
+      "origin": ["http://localhost:3000", "https://https://missing-persons-mu.vercel.app/"],
+      "method": ["GET", "POST", "PUT", "OPTIONS"],
+      "responseHeader": ["Content-Type", "Authorization"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+  
