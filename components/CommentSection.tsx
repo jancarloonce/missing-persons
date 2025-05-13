@@ -4,76 +4,86 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { getCase, listenComments, createComment } from "@/lib/db";
+import { listenComments, createComment } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
-import type { Case, Comment } from "@/types";
+import type { Comment } from "@/types";
 
-export default function CommentSection({ caseId }: { caseId: string }) {
-  const { user, profile, loading } = useAuth();
+interface CommentSectionProps {
+  caseId: string;
+}
+
+export default function CommentSection({ caseId }: CommentSectionProps) {
+  const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [caseData, setCaseData] = useState<Case | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
+  // comments: null = loading, [] = no comments, >0 = loaded
+  const [comments, setComments] = useState<Comment[] | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // If not signed in, send them to login
+  // redirect if not logged in
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/login");
     }
-  }, [loading, user, router]);
+  }, [authLoading, user, router]);
 
-  // Fetch the case once, and subscribe to comments
+  // subscribe to comments once per caseId
   useEffect(() => {
-    if (user) {
-      getCase(caseId).then((c) => c && setCaseData(c));
-      const unsub = listenComments(caseId, setComments);
-      return unsub;
-    }
+    if (!user) return;
+    const unsub = listenComments(caseId, (snapshotComments) => {
+      // dedupe by id just in case
+      const unique = Array.from(
+        new Map(snapshotComments.map((c) => [c.id, c])).values()
+      );
+      setComments(unique);
+    });
+    return unsub;
   }, [caseId, user]);
 
-  if (loading || !caseData) return <p>Loading…</p>;
+  // show loading until we have the first comments array
+  if (authLoading || comments === null) {
+    return <p>Loading comments…</p>;
+  }
 
-  const handleComment = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
     setSubmitting(true);
-    await createComment(caseId, {
-      authorName: profile.username,
-      content,
-    });
-    setContent("");
-    setSubmitting(false);
+    try {
+      await createComment(caseId, {
+        authorName: profile.username,
+        content,
+      });
+      setContent("");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <>
-      <h1 className="text-2xl font-bold mb-2">{caseData.title}</h1>
-      <p className="mb-4 text-sm text-gray-600">
-        Posted by {caseData.reporterName} ·{" "}
-        {formatDate(caseData.createdAt)}
-      </p>
-      <p className="mb-6">{caseData.description}</p>
-
-      <hr className="my-6" />
-
+    <section>
       <h2 className="text-xl font-semibold mb-4">Comments</h2>
-      <div className="space-y-4 mb-6">
-        {comments.map((c) => (
-          <div key={c.id} className="border p-2 rounded">
-            <p className="text-sm text-gray-600">
-              {c.authorName} ‒ {formatDate(c.createdAt)}
-            </p>
-            <p>{c.content}</p>
-          </div>
-        ))}
-      </div>
 
-      <form onSubmit={handleComment} className="max-w-lg space-y-4">
+      {comments.length === 0 ? (
+        <p className="text-gray-500 mb-6">No comments yet.</p>
+      ) : (
+        <div className="space-y-4 mb-6">
+          {comments.map((c) => (
+            <div key={c.id} className="border p-3 rounded">
+              <p className="text-sm text-gray-600">
+                {c.authorName} · {formatDate(c.createdAt)}
+              </p>
+              <p className="mt-1">{c.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <textarea
           className="w-full p-2 border rounded"
-          placeholder="Write a comment…"
+          placeholder="Add a comment…"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={3}
@@ -87,6 +97,6 @@ export default function CommentSection({ caseId }: { caseId: string }) {
           {submitting ? "Posting…" : "Post Comment"}
         </button>
       </form>
-    </>
+    </section>
   );
 }

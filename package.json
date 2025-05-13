@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "clean": "rimraf .next",
+    "dev": "next dev",
+    "dev:clean": "npm run clean && npm run dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint . --ext .ts,.tsx",
+    "lint:fix": "next lint . --ext .ts,.tsx --fix",
+    "check": "npm run lint && npm run build",
     "init:tailwind": "tailwindcss init -p"
   },
   "dependencies": {
@@ -26,7 +30,10 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.0.0",
     "postcss": "^8.5.3",
+    "rimraf": "^5.0.0",
     "tailwindcss": "^4.1.6",
     "typescript": "^5"
   }

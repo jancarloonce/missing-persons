@@ -10,7 +10,6 @@ import {
   doc,
   getDoc,
   updateDoc,
-  arrayUnion,
 } from "firebase/firestore";
 import type {
   Case,

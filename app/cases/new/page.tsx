@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, ClipboardEvent } from "react";
+import { useState, useEffect, ClipboardEvent, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth";
 import { createCase } from "@/lib/db";
 import { uploadCasePhoto } from "@/lib/storage";
@@ -11,7 +12,6 @@ export default function NewCasePage() {
   const { profile, loading } = useAuth();
   const router = useRouter();
 
-  // form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -19,14 +19,12 @@ export default function NewCasePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // redirect if not authenticated
   useEffect(() => {
     if (!loading && !profile) {
       router.push("/login");
     }
   }, [loading, profile, router]);
 
-  // handle paste of images into description
   const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const imageItems = Array.from(e.clipboardData.items).filter((i) =>
       i.type.startsWith("image/")
@@ -42,37 +40,34 @@ export default function NewCasePage() {
     }
   };
 
-  // file‐picker fallback
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const picked = Array.from(e.target.files).slice(0, 5 - files.length);
       setFiles((prev) => [...prev, ...picked]);
     }
   };
 
-  // remove one file from preview
   const removeFile = (idx: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
-  
+
     setSubmitting(true);
     setError(null);
-  
+
     try {
-      // 1) upload all images first
+      // 1) upload images first
       const photoUrls: string[] = [];
       for (let i = 0; i < files.length; i++) {
         setProgress(`Uploading ${i + 1} of ${files.length}…`);
-        // pass both caseId and file
-        const url = await uploadCasePhoto(/* caseId placeholder */ "", files[i]);
+        const url = await uploadCasePhoto(profile.uid, files[i]);
         photoUrls.push(url);
       }
-  
-      // 2) create the case with the uploaded URLs
+
+      // 2) create case
       setProgress("Saving case…");
       const docRef = await createCase({
         title,
@@ -80,24 +75,24 @@ export default function NewCasePage() {
         reporterId: profile.uid,
         reporterName: profile.username,
         photoUrls,
-      });
-  
-      // 3) navigate to the new case
+      } as NewCase & { photoUrls: string[] });
+
       router.push(`/cases/${docRef.id}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError("Failed to post case. Please try again.");
       setSubmitting(false);
       setProgress(null);
     }
   };
-  
 
   return (
     <div className="max-w-lg mx-auto mt-8 p-6 bg-white rounded-lg shadow">
       <h2 className="text-2xl font-semibold mb-4">Post a Missing Person</h2>
       {error && (
-        <div className="mb-4 px-4 py-2 bg-red-100 text-red-800 rounded">{error}</div>
+        <div className="mb-4 px-4 py-2 bg-red-100 text-red-800 rounded">
+          {error}
+        </div>
       )}
       {progress && (
         <div className="mb-4 px-4 py-2 bg-blue-100 text-blue-800 rounded">
@@ -105,7 +100,6 @@ export default function NewCasePage() {
         </div>
       )}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title */}
         <div>
           <label className="block text-gray-700 mb-1">Title</label>
           <input
@@ -119,7 +113,6 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Description with paste */}
         <div>
           <label className="block text-gray-700 mb-1">Description</label>
           <textarea
@@ -137,17 +130,19 @@ export default function NewCasePage() {
           </p>
         </div>
 
-        {/* Image previews */}
         {files.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
             {files.map((file, idx) => {
               const url = URL.createObjectURL(file);
               return (
                 <div key={idx} className="relative">
-                  <img
+                  <Image
                     src={url}
                     alt="preview"
-                    className="w-full h-24 object-cover rounded"
+                    width={200}
+                    height={120}
+                    className="object-cover rounded"
+                    unoptimized
                   />
                   <button
                     type="button"
@@ -162,7 +157,6 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* Fallback file picker */}
         <div>
           <label className="block text-gray-700 mb-1">Upload Photos</label>
           <input
@@ -178,7 +172,6 @@ export default function NewCasePage() {
           </p>
         </div>
 
-        {/* Submit */}
         <button
           type="submit"
           disabled={submitting}
